@@ -9,8 +9,8 @@ fs.mkdirSync(path.join(root,'docs'),{recursive:true});
 fs.mkdirSync(path.join(root,'docs/assets'),{recursive:true});
 fs.writeFileSync(path.join(root,'docs/products.json'),JSON.stringify(ctx.catalog));
 let page=fs.readFileSync(path.join(root,'pages/index.html'),'utf8');
-page=page.replace('</head>','<link rel="icon" type="image/png" href="./assets/al-horno-icon.png"><link rel="stylesheet" href="./storefront.css"><link rel="stylesheet" href="./clarity.css"></head>').replace('</body>','<script src="./storefront.js"></script><script src="./remote-config.js"></script><script src="./accounts.js"></script></body>');
-for(const name of ['storefront.css','clarity.css','storefront.js','remote-config.js','accounts.js','assets/al-horno-logo.png','assets/al-horno-icon.png']){
+page=page.replace('</head>','<link rel="icon" type="image/png" href="./assets/al-horno-icon-transparent.png"><link rel="stylesheet" href="./storefront.css"><link rel="stylesheet" href="./clarity.css"></head>').replace('</body>','<script src="./storefront.js"></script><script src="./remote-config.js"></script><script src="./accounts.js"></script></body>');
+for(const name of ['storefront.css','clarity.css','storefront.js','remote-config.js','accounts.js','assets/al-horno-logo.png','assets/al-horno-icon-transparent.png']){
  const file=fs.readFileSync(path.join(root,'pages',name));
  fs.writeFileSync(path.join(root,'docs',name),file);
  page=page.replaceAll('./'+name,'./'+name+'?v='+createHash('sha256').update(file).digest('hex').slice(0,10));
