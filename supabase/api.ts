@@ -1,5 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.95.0';
 import catalog from './products.json' with {type:'json'};
+import {decodePhoto,PHOTO_BUCKET,PHOTO_LIMIT} from './photo.ts';
 const URL=Deno.env.get('SUPABASE_URL')!,KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,ANON=Deno.env.get('SUPABASE_ANON_KEY')!;
 const ORIGIN='https://favid243.github.io',ADMIN='gamerpixelpulse@gmail.com';
 const db=createClient(URL,KEY,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -18,13 +19,31 @@ function checked<T extends {error:unknown,data:unknown}>(r:T){if(r.error)bad('No
 Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{headers});try{
  if(req.headers.get('Origin')&&req.headers.get('Origin')!==ORIGIN)bad('Origen no permitido',403);
  const path=new globalThis.URL(req.url).pathname.split('/al-horno-api')[1]||'/';
- let b:any={};if(!['GET','HEAD'].includes(req.method)){if(!req.headers.get('Content-Type')?.startsWith('application/json'))bad('Formato inválido',415);const raw=await req.text();if(raw.length>40000)bad('Solicitud demasiado grande',413);try{b=JSON.parse(raw)}catch{bad('Solicitud inválida')}if(!b||typeof b!=='object'||Array.isArray(b))bad('Solicitud inválida');}
+ const photoRoute=path.match(/^\/products\/([a-z0-9_-]{1,40})\/image$/);
+ // Check administrator permissions before reading the larger image payload.
+ const photoActor=photoRoute&&req.method==='POST'?await actor(req):null;
+ if(photoActor)mustAdmin(photoActor);
+ let b:any={};if(!['GET','HEAD'].includes(req.method)){if(!req.headers.get('Content-Type')?.startsWith('application/json'))bad('Formato inválido',415);const max=photoActor?Math.ceil(PHOTO_LIMIT/3)*4+200:40000;if(Number(req.headers.get('Content-Length'))>max)bad('Solicitud demasiado grande',413);const raw=await req.text();if(raw.length>max)bad('Solicitud demasiado grande',413);try{b=JSON.parse(raw)}catch{bad('Solicitud inválida')}if(!b||typeof b!=='object'||Array.isArray(b))bad('Solicitud inválida');}
  const ip=await hash(req.headers.get('x-forwarded-for')?.split(',')[0]||req.headers.get('cf-connecting-ip')||'unknown');
  if(path==='/guest'&&req.method==='POST'){await rate('guest:'+ip,20,3600);const token='guest.'+crypto.randomUUID()+crypto.randomUUID();const saved=await db.from('ah_guests').insert({token_hash:await hash(token)}).select('owner_id').single();checked(saved);return result({token,user:{id:saved.data!.owner_id,role:'guest',name:'Invitado'}});}
  if(path==='/register'&&req.method==='POST'){await rate('register:'+ip,8,3600);const username=str(b.name,40).toLowerCase(),email=str(b.email,200).toLowerCase(),password=str(b.password,128);if(!/^[a-z0-9_.-]{3,40}$/.test(username)||password.length<8||!email.includes('@'))bad('Usa un nombre de 3–40 caracteres sin espacios y una contraseña de al menos 8 caracteres.');const {error}=await auth().auth.signUp({email,password,options:{data:{username},emailRedirectTo:ORIGIN+'/al-horno/'}});if(error)bad('No se pudo crear la cuenta. Revisa el nombre, correo y contraseña o intenta más tarde.');return result({message:'Revisa tu correo para confirmar la cuenta. Después inicia sesión con tu nombre y contraseña.'});}
  if(path==='/login'&&req.method==='POST'){await rate('login:'+ip,15,900);const name=str(b.name,200).toLowerCase(),password=str(b.password,128);await rate('login-name:'+await hash(name),15,900);const {data:p}=await db.from('ah_profiles').select('email').eq('username',name).maybeSingle();const {data,error}=await auth().auth.signInWithPassword({email:p?.email||'not-found@invalid.example',password});if(error||!data.session)bad('Nombre o contraseña incorrectos, o correo sin confirmar.',401);return result({session:data.session});}
  if(path==='/refresh'&&req.method==='POST'){await rate('refresh:'+ip,100,3600);const {data,error}=await auth().auth.refreshSession({refresh_token:str(b.refreshToken,500)});if(error||!data.session)bad('Inicia sesión nuevamente',401);return result({session:data.session});}
- const a=await actor(req);if(path==='/me'&&req.method==='GET')return result({user:a});
+ if(path==='/product-images'&&req.method==='GET')return result({images:checked(await db.from('ah_product_images').select('product_id,image_url,updated_at').limit(100))});
+ const a=photoActor||await actor(req);if(path==='/me'&&req.method==='GET')return result({user:a});
+ if(photoRoute&&req.method==='POST'){
+  mustAdmin(a);const id=photoRoute[1];if(!catalog.some(p=>p.id===id))bad('Postre no encontrado',404);
+  await rate('photo:'+a.id,60,3600);
+  if(b.reset===true){checked(await db.from('ah_product_images').delete().eq('product_id',id));return result({product_id:id,image_url:null});}
+  const photo=decodePhoto(b.image);
+  const bucket=await db.storage.getBucket(PHOTO_BUCKET);
+  if(bucket.error){const created=await db.storage.createBucket(PHOTO_BUCKET,{public:true,allowedMimeTypes:['image/jpeg','image/png','image/webp'],fileSizeLimit:PHOTO_LIMIT});if(created.error)checked(await db.storage.getBucket(PHOTO_BUCKET));}
+  const file=id+'/'+crypto.randomUUID()+'.'+photo.extension;
+  checked(await db.storage.from(PHOTO_BUCKET).upload(file,photo.bytes,{contentType:photo.mime,cacheControl:'31536000',upsert:false}));
+  const image_url=db.storage.from(PHOTO_BUCKET).getPublicUrl(file).data.publicUrl;
+  const saved=await db.from('ah_product_images').upsert({product_id:id,image_url,updated_at:new Date().toISOString()}).select('product_id,image_url,updated_at').single();
+  return result(checked(saved));
+ }
  if(path==='/orders'&&req.method==='GET'){let q=db.from('ah_orders').select('*').order('created_at',{ascending:false}).limit(300);if(a.role!=='administrator')q=q.eq('owner_id',a.id);return result({orders:checked(await q)});}
  if(path==='/orders'&&req.method==='POST'){
   const key=uuid(b.requestKey);const {data:existing}=await db.from('ah_orders').select('*').eq('owner_id',a.id).eq('request_key',key).maybeSingle();if(existing)return result({order:existing});await rate('order:'+a.id,15,3600);
