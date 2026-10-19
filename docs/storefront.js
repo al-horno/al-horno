@@ -12,5 +12,18 @@
  const total=document.getElementById('total');total.hidden=true;total.after(totals);
  function update(){const subtotal=cart.reduce((sum,item)=>{const product=products.find(p=>p.id===item.id);return sum+(product?product.price*item.qty:0)},0);const delivery=cart.length?4500:0;const extras=cart.some(item=>item.size!=='Original'||item.toppings.length);totals.innerHTML='<div class="row"><span>Productos</span><strong>'+money(subtotal)+'</strong></div><div class="row"><span>Domicilio</span><strong>'+money(delivery)+'</strong></div>'+(extras?'<div class="row"><span>Tamaño grande y toppings</span><span>Por cotizar</span></div>':'')+'<div class="row grand"><span>Total '+(extras?'base ':'')+'con domicilio</span><span>'+money(subtotal+delivery)+'</span></div><p class="checkout-help">'+(cart.length?'Incluye domicilio de $4.500.':'El domicilio cuesta $4.500 al agregar productos.')+(extras?' Confirma el precio de los adicionales antes de pagar.':'')+'</p>';}
  new MutationObserver(update).observe(total,{childList:true,subtree:true,characterData:true});update();
- form.onsubmit=event=>{event.preventDefault();if(!cart.length)return;const data=new FormData(form);const subtotal=cart.reduce((sum,x)=>sum+products.find(p=>p.id===x.id).price*x.qty,0);const lines=cart.map(x=>{const p=products.find(p=>p.id===x.id);return x.qty+' × '+p.name+' — '+money(p.price*x.qty)+'\n'+[x.size,...x.toppings,x.note].filter(Boolean).join(' · ')});const message=['¡Hola, Al Horno! Quiero hacer este pedido:','',...lines,'','Productos: '+money(subtotal),'Domicilio: '+money(4500),'Adicionales: por cotizar','Total con domicilio: '+money(subtotal+4500),'Forma de pago: '+data.get('payment'),'Nombre: '+data.get('name'),'Celular: '+data.get('phone'),'Dirección: '+data.get('address'),'Notas: '+data.get('notes'),'Por favor confirmen disponibilidad y total final.'].join('\n');location.href='https://wa.me/573222798084?text='+encodeURIComponent(message)};
+ function orderByWhatsApp(){
+  if(!cart.length||form.querySelector('button[type=submit]').disabled||!form.reportValidity())return;
+  const data=new FormData(form);
+  const subtotal=cart.reduce((sum,x)=>sum+products.find(p=>p.id===x.id).price*x.qty,0);
+  const extras=cart.some(x=>x.size!=='Original'||x.toppings.length);
+  const lines=cart.map(x=>{const p=products.find(p=>p.id===x.id);return x.qty+' × '+p.name+' — '+money(p.price*x.qty)+'\n'+[x.size,...x.toppings,x.note].filter(Boolean).join(' · ')});
+  const message=['¡Hola, Al Horno! Quiero hacer este pedido:','',...lines,'','Productos: '+money(subtotal),'Domicilio: '+money(4500),...(extras?['Adicionales: por cotizar']:[]),'Total '+(extras?'base ':'')+'con domicilio: '+money(subtotal+4500),'Forma de pago: '+data.get('payment'),'Nombre: '+data.get('name'),'Celular: '+data.get('phone'),'Dirección: '+data.get('address'),...(data.get('notes')?.trim()?['Notas: '+data.get('notes').trim()]:[]),'Por favor confirmen disponibilidad y total final.'].join('\n');
+  location.href='https://wa.me/573222798084?text='+encodeURIComponent(message);
+ }
+ const alternative=document.createElement('div');alternative.className='whatsapp-order-option';
+ alternative.innerHTML='<p class="order-divider">O pide por WhatsApp</p><button id="order-whatsapp" class="whatsapp-order" type="button" aria-describedby="whatsapp-order-help">Pedir por WhatsApp ↗</button><p id="whatsapp-order-help">Usamos los datos de arriba para preparar tu mensaje. Tú lo envías en WhatsApp y el negocio te confirma por allí. Esta opción no registra el pedido en «Mis pedidos».</p>';
+ form.append(alternative);
+ document.getElementById('order-whatsapp').onclick=orderByWhatsApp;
+ form.onsubmit=event=>{event.preventDefault();orderByWhatsApp()};
 })();
