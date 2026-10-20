@@ -2,7 +2,7 @@ import {createClient} from 'npm:@supabase/supabase-js@2.95.0';
 import catalog from './products.json' with {type:'json'};
 import {decodePhoto,PHOTO_BUCKET,PHOTO_LIMIT} from './photo.ts';
 const URL=Deno.env.get('SUPABASE_URL')!,KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,ANON=Deno.env.get('SUPABASE_ANON_KEY')!;
-const ORIGIN='https://favid243.github.io',ADMIN='gamerpixelpulse@gmail.com';
+const ORIGIN='https://al-horno.github.io',ADMIN='gamerpixelpulse@gmail.com';
 const db=createClient(URL,KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const auth=()=>createClient(URL,ANON,{auth:{persistSession:false,autoRefreshToken:false}});
 const headers={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'GET, POST, PATCH, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'};

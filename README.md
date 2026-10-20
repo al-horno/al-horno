@@ -1,6 +1,6 @@
 # Al Horno · Postres
 
-[Visitar Al Horno](https://favid243.github.io/al-horno/) · [Carrito](https://favid243.github.io/al-horno/carrito.html)
+[Visitar Al Horno](https://al-horno.github.io/al-horno/) · [Carrito](https://al-horno.github.io/al-horno/carrito.html)
 
 GitHub Pages publica `docs/` de `main`. Incluye catálogo, búsqueda, páginas de producto, tamaños, toppings, carrito separado y domicilio fijo de COP 4.500. Los adicionales se cotizan aparte. Efectivo, Nequi y WhatsApp son métodos de coordinación del pago; no se realizan cobros automáticos.
 
