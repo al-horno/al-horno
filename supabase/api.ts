@@ -1,5 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.95.0';
-import catalog from './products.json' with {type:'json'};
+import './pricing.js';
+const pricing=(globalThis as any).AlHornoPricing;
 import {decodePhoto,PHOTO_BUCKET,PHOTO_LIMIT} from './photo.ts';
 const URL=Deno.env.get('SUPABASE_URL')!,KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,ANON=Deno.env.get('SUPABASE_ANON_KEY')!;
 const ORIGIN='https://al-horno.github.io',ADMIN='gamerpixelpulse@gmail.com';
@@ -16,6 +17,8 @@ async function actor(req:Request){const token=req.headers.get('Authorization')?.
  const {data:{user},error}=await auth().auth.getUser(token);if(error||!user)bad('Inicia sesión para continuar',401);const {data:p}=await db.from('ah_profiles').select('username').eq('user_id',user.id).maybeSingle();const {data:admin}=await db.from('ah_admins').select('user_id').eq('user_id',user.id).maybeSingle();return {id:user.id,name:p?.username||'Cliente',role:admin&&user.email_confirmed_at&&user.email?.toLowerCase()===ADMIN?'administrator':'user'};}
 function mustAdmin(a:{role:string}){if(a.role!=='administrator')bad('No tienes permiso',403);}
 function checked<T extends {error:unknown,data:unknown}>(r:T){if(r.error)bad('No se pudo guardar. Intenta nuevamente.',503);return r.data;}
+async function catalogRows(){return checked(await db.from('ah_products').select('id,data,version').order('sort_order').order('created_at').order('id').limit(500)) as any[];}
+async function publicCatalog(){const rows=await catalogRows();const photos=checked(await db.from('ah_product_images').select('product_id,image_url').limit(500)) as any[];return rows.map(r=>({...r.data,id:r.id,version:r.version,baseImg:r.data.img,img:photos.find(p=>p.product_id===r.id)?.image_url||r.data.img}));}
 Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{headers});try{
  if(req.headers.get('Origin')&&req.headers.get('Origin')!==ORIGIN)bad('Origen no permitido',403);
  const path=new globalThis.URL(req.url).pathname.split('/al-horno-api')[1]||'/';
@@ -29,10 +32,19 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{heade
  if(path==='/register'&&req.method==='POST'){await rate('register:'+ip,8,3600);const username=str(b.name,40).toLowerCase(),email=str(b.email,200).toLowerCase(),password=str(b.password,128);if(!/^[a-z0-9_.-]{3,40}$/.test(username)||password.length<8||!email.includes('@'))bad('Usa un nombre de 3–40 caracteres sin espacios y una contraseña de al menos 8 caracteres.');const {error}=await auth().auth.signUp({email,password,options:{data:{username},emailRedirectTo:ORIGIN+'/al-horno/'}});if(error)bad('No se pudo crear la cuenta. Revisa el nombre, correo y contraseña o intenta más tarde.');return result({message:'Revisa tu correo para confirmar la cuenta. Después inicia sesión con tu nombre y contraseña.'});}
  if(path==='/login'&&req.method==='POST'){await rate('login:'+ip,15,900);const name=str(b.name,200).toLowerCase(),password=str(b.password,128);await rate('login-name:'+await hash(name),15,900);const {data:p}=await db.from('ah_profiles').select('email').eq('username',name).maybeSingle();const {data,error}=await auth().auth.signInWithPassword({email:p?.email||'not-found@invalid.example',password});if(error||!data.session)bad('Nombre o contraseña incorrectos, o correo sin confirmar.',401);return result({session:data.session});}
  if(path==='/refresh'&&req.method==='POST'){await rate('refresh:'+ip,100,3600);const {data,error}=await auth().auth.refreshSession({refresh_token:str(b.refreshToken,500)});if(error||!data.session)bad('Inicia sesión nuevamente',401);return result({session:data.session});}
+ if(path==='/catalog'&&req.method==='GET')return result({products:await publicCatalog()});
  if(path==='/product-images'&&req.method==='GET')return result({images:checked(await db.from('ah_product_images').select('product_id,image_url,updated_at').limit(100))});
  const a=photoActor||await actor(req);if(path==='/me'&&req.method==='GET')return result({user:a});
+ const productRoute=path.match(/^\/products\/([a-z0-9_-]{1,40})$/);
+ if((path==='/products'&&req.method==='POST')||(productRoute&&req.method==='PATCH')){
+  mustAdmin(a);await rate('product:'+a.id,100,3600);const data=pricing.validateProduct(b);
+  if(productRoute){if(!Number.isInteger(b.version)||b.version<1)bad('Actualiza el producto antes de guardar.',409);const saved=await db.from('ah_products').update({data,version:b.version+1}).eq('id',productRoute[1]).eq('version',b.version).select('id,data,version').maybeSingle();checked(saved);if(!saved.data)bad('Este producto cambió en otro dispositivo. Vuelve a cargarlo antes de guardar.',409);return result({product:{...saved.data.data,id:saved.data.id,version:saved.data.version}});}
+  const count=await db.from('ah_products').select('id',{count:'exact',head:true});if(count.error)bad('No se pudo consultar el catálogo.',503);if((count.count||0)>=500)bad('El catálogo admite hasta 500 postres.');
+  const saved=checked(await db.from('ah_products').insert({id:'p_'+crypto.randomUUID().replaceAll('-',''),data}).select('id,data,version').single()) as any;
+  return result({product:{...saved.data,id:saved.id,version:saved.version}},201);
+ }
  if(photoRoute&&req.method==='POST'){
-  mustAdmin(a);const id=photoRoute[1];if(!catalog.some(p=>p.id===id))bad('Postre no encontrado',404);
+  mustAdmin(a);const id=photoRoute[1];const product=checked(await db.from('ah_products').select('id').eq('id',id).maybeSingle());if(!product)bad('Postre no encontrado',404);
   await rate('photo:'+a.id,60,3600);
   if(b.reset===true){checked(await db.from('ah_product_images').delete().eq('product_id',id));return result({product_id:id,image_url:null});}
   const photo=decodePhoto(b.image);
@@ -48,8 +60,9 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{heade
  if(path==='/orders'&&req.method==='POST'){
   const key=uuid(b.requestKey);const {data:existing}=await db.from('ah_orders').select('*').eq('owner_id',a.id).eq('request_key',key).maybeSingle();if(existing)return result({order:existing});await rate('order:'+a.id,15,3600);
   if(!Array.isArray(b.items)||!b.items.length||b.items.length>50)bad('Revisa el carrito');
-  const items=b.items.map((x:any)=>{if(!x||typeof x!=='object')bad('Producto inválido');const p=catalog.find(p=>p.id===x.id);if(!p||!Number.isInteger(x.qty)||x.qty<1||x.qty>99)bad('Producto o cantidad inválidos');if(x.expectedPrice!==p.price)bad('Un precio cambió. Recarga el catálogo.',409);if(!['Original','Grande (por cotizar)'].includes(x.size)||!Array.isArray(x.toppings)||x.toppings.length>5||x.toppings.some((t:string)=>!['Chocolate','Arequipe','Oreo','Fresas','Chispas de chocolate'].includes(t)))bad('Opciones inválidas');return {id:p.id,name:p.name,price:p.price,qty:x.qty,size:x.size,toppings:[...new Set(x.toppings)],note:str(x.note||'',300,false)};});
-  if(!['Efectivo','Nequi','WhatsApp'].includes(b.payment))bad('Forma de pago inválida');const sub=items.reduce((n:number,x:any)=>n+x.price*x.qty,0);const payload={items,name:str(b.name,100),phone:str(b.phone,30),address:str(b.address,300),notes:str(b.notes||'',500,false),payment:b.payment,paymentStatus:'pendiente',subtotal:sub,delivery:4500,total:sub+4500,extrasPending:items.some((x:any)=>x.size!=='Original'||x.toppings.length)};
+  const rows=await catalogRows();
+  const items=b.items.map((x:any)=>{if(!x||typeof x!=='object')bad('Producto inválido');const r=rows.find(r=>r.id===x.id);const p=r?{...r.data,id:r.id}:null;const q=pricing.quote(p,x);if(x.expectedPrice!==q.price||(x.expectedVersion!==undefined&&x.expectedVersion!==r.version)||(x.expectedPending!==undefined&&x.expectedPending!==q.extrasPending))bad('El menú cambió. Revisa los precios actualizados y vuelve a enviar.',409);return {id:p.id,name:p.name,...q,qty:x.qty,note:str(x.note||'',300,false)};});
+  if(!['Efectivo','Nequi','WhatsApp'].includes(b.payment))bad('Forma de pago inválida');const sub=items.reduce((n:number,x:any)=>n+x.price*x.qty,0);const payload={items,name:str(b.name,100),phone:str(b.phone,30),address:str(b.address,300),notes:str(b.notes||'',500,false),payment:b.payment,paymentStatus:'pendiente',subtotal:sub,delivery:4500,total:sub+4500,extrasPending:items.some((x:any)=>x.extrasPending)};
   const created=await db.from('ah_orders').insert({owner_id:a.id,request_key:key,payload}).select('*').single();if(created.error?.code==='23505'){const duplicate=await db.from('ah_orders').select('*').eq('owner_id',a.id).eq('request_key',key).single();return result({order:checked(duplicate)});}return result({order:checked(created)},201);
  }
  if(path.startsWith('/orders/')&&req.method==='PATCH'){mustAdmin(a);const id=uuid(path.split('/')[2]);if(!['recibido','confirmado','preparando','en_camino','entregado','cancelado'].includes(b.status)||!Number.isInteger(b.version))bad('Estado inválido');const changed=await db.from('ah_orders').update({status:b.status,version:b.version+1}).eq('id',id).eq('version',b.version).select('*').maybeSingle();checked(changed);if(!changed.data)bad('El pedido cambió. Actualiza el panel.',409);return result({order:changed.data});}

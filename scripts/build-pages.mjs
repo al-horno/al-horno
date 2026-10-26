@@ -9,18 +9,12 @@ fs.mkdirSync(path.join(root,'docs'),{recursive:true});
 fs.mkdirSync(path.join(root,'docs/assets'),{recursive:true});
 fs.writeFileSync(path.join(root,'docs/products.json'),JSON.stringify(ctx.catalog));
 let page=fs.readFileSync(path.join(root,'pages/index.html'),'utf8');
-page=page.replace('</head>','<link rel="icon" type="image/png" href="./assets/al-horno-icon-large.png"><link rel="stylesheet" href="./storefront.css"><link rel="stylesheet" href="./clarity.css"></head>').replace('</body>','<script src="./storefront.js"></script><script src="./remote-config.js"></script><script src="./accounts.js"></script><script src="./product-photos.js"></script></body>');
-for(const name of ['storefront.css','clarity.css','storefront.js','remote-config.js','accounts.js','product-photos.js','assets/al-horno-logo.png','assets/al-horno-icon-large.png']){
- const file=fs.readFileSync(path.join(root,'pages',name));
- fs.writeFileSync(path.join(root,'docs',name),file);
+page=page.replace('</head>','<link rel="icon" type="image/png" href="./assets/al-horno-icon-large.png"><link rel="stylesheet" href="./storefront.css"><link rel="stylesheet" href="./clarity.css"><link rel="stylesheet" href="./commerce.css"><script src="./remote-config.js"></script><script src="./pricing.js"></script></head>').replace('</body>','<script src="./catalog.js"></script><script src="./storefront.js"></script><script src="./admin-products.js"></script><script src="./accounts.js"></script><script src="./product-photos.js"></script></body>');
+for(const name of ['storefront.css','clarity.css','commerce.css','catalog.js','pricing.js','storefront.js','remote-config.js','admin-products.js','accounts.js','product-photos.js','assets/al-horno-logo.png','assets/al-horno-icon-large.png']){
+ const file=fs.readFileSync(path.join(root,'pages',name));fs.writeFileSync(path.join(root,'docs',name),file);
  page=page.replaceAll('./'+name,'./'+name+'?v='+createHash('sha256').update(file).digest('hex').slice(0,10));
 }
 page=page.replaceAll('href="#carrito"','href="./carrito.html"');
-page=page.replace('function draw(){let total=0,count=0;',"function draw(){if(!$('items')){$('count').textContent=cart.reduce((sum,x)=>sum+x.qty,0);save();return}let total=0,count=0;");
-page=page.replace("$('items').onclick=", "if($('items'))$('items').onclick=");
-page=page.replace("$('checkout').onsubmit=", "if($('checkout'))$('checkout').onsubmit=");
-page=page.replace("const isCart=hash==='#carrito';", "const isCart=location.pathname.endsWith('/carrito.html');if(hash==='#carrito'&&!isCart){location.replace('./carrito.html');return}");
-page=page.replace("$('carrito').hidden=!isCart;", "if($('carrito'))$('carrito').hidden=!isCart;");
 const catalog=page.replace(/<section id="carrito"[\s\S]*?<\/section>/,'');
 if(catalog.includes('id="carrito"')||catalog.includes('id="checkout"'))throw Error('Cart must not exist in catalog');
 const cartPage=page.replaceAll('href="#catalogo"','href="./index.html#catalogo"').replace('<section id="hero" class="hero">','<section id="hero" class="hero" hidden>').replace('<section id="catalogo">','<section id="catalogo" hidden>');
