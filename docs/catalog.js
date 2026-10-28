@@ -1,16 +1,18 @@
 let products=[],cart=[],selected,catalogOnline=false;
 const $=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n),escapeText=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pricing=window.AlHornoPricing;
+let shopSettings=AlHornoShopRules.defaults(),bestsellers=[],quickFilter="all";
+function deliveryQuote(){return AlHornoShopRules.delivery(shopSettings,window.ahDeliveryChoice||{})}
 function notify(s){$('toast').textContent=s;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),4500)}
 function save(){try{localStorage.setItem('alHornoPagesCart',JSON.stringify(cart))}catch{}}
 function cartQuote(x){return pricing.quote(products.find(p=>p.id===x.id),x)}
-function cartSummary(){let subtotal=0,pending=false,error='';for(const x of cart){try{const q=cartQuote(x);subtotal+=q.lineTotal;pending||=q.extrasPending;}catch(e){error=e.message;}}return {subtotal,pending,error,total:subtotal+(cart.length?4500:0)};}
+function cartSummary(){let subtotal=0,pending=false,error='';for(const x of cart){try{const q=cartQuote(x);subtotal+=q.lineTotal;pending||=q.extrasPending;}catch(e){error=e.message;}}let delivery=0;try{delivery=cart.length?deliveryQuote().delivery:0}catch(e){error=e.message}return {subtotal,pending,error,delivery,total:subtotal+delivery};}
 function catalog(){
  const q=$('search').value.toLocaleLowerCase(),cat=$('category').value;
- const found=products.filter(p=>(!cat||p.cat===cat)&&p.name.toLocaleLowerCase().includes(q));
- const sort=$('sort').value;if(sort==='price-asc')found.sort((a,b)=>a.price-b.price);if(sort==='price-desc')found.sort((a,b)=>b.price-a.price);if(sort==='name')found.sort((a,b)=>a.name.localeCompare(b.name,'es'));
- $('results-count').textContent=found.length+' '+(found.length===1?'postre':'postres')+' en el menú';$('clear-filters').hidden=!q&&!cat&&sort==='menu';
- $('products').innerHTML=found.map(p=>`<article class="card ${p.available?'':'sold-out'}"><a href="#producto/${escapeText(p.id)}"><img loading="lazy" src="${escapeText(p.img)}" alt="${escapeText(p.name)}"></a><div><span class="muted">${escapeText(p.cat)}</span>${p.available?'':'<span class="stock-label">Agotado por ahora</span>'}<h3><a href="#producto/${escapeText(p.id)}">${escapeText(p.name)}</a></h3><p>${escapeText(p.desc)}</p><div class="row"><span class="price">${money(p.price)}</span><button data-add="${escapeText(p.id)}" aria-label="Ver opciones de ${escapeText(p.name)}">Ver opciones <span aria-hidden="true">↗</span></button></div></div></article>`).join('')||'<div class="empty"><h3>No encontramos ese postre</h3><p>Prueba otro nombre o pulsa «Limpiar filtros».</p></div>';
+ const found=products.filter(p=>(!cat||p.cat===cat)&&p.name.toLocaleLowerCase().includes(q)&&(quickFilter==='all'||quickFilter==='best'&&bestsellers.some(x=>x.id===p.id)||quickFilter==='sale'&&p.salePrice!=null||quickFilter==='new'&&p.isNew));
+ const sort=$('sort').value;if(sort==='price-asc')found.sort((a,b)=>(a.salePrice??a.price)-(b.salePrice??b.price));if(sort==='price-desc')found.sort((a,b)=>(b.salePrice??b.price)-(a.salePrice??a.price));if(sort==='name')found.sort((a,b)=>a.name.localeCompare(b.name,'es'));
+ $('results-count').textContent=found.length+' '+(found.length===1?'postre':'postres')+' en el menú';$('clear-filters').hidden=!q&&!cat&&sort==='menu'&&quickFilter==='all';
+ $('products').innerHTML=found.map(p=>`<article class="card ${p.available?'':'sold-out'}"><a href="#producto/${escapeText(p.id)}"><img loading="lazy" decoding="async" width="400" height="300" src="${escapeText(p.img)}" alt="${escapeText(p.name)}"></a><div><div class="product-badges">${bestsellers.some(x=>x.id===p.id)?"<span>Más vendido</span>":""}${p.isNew?"<span>Nuevo</span>":""}${p.salePrice!=null?"<span>Oferta</span>":""}</div><span class="muted">${escapeText(p.cat)}</span>${p.available?'':'<span class="stock-label">Agotado por ahora</span>'}<h3><a href="#producto/${escapeText(p.id)}">${escapeText(p.name)}</a></h3><p>${escapeText(p.desc)}</p><div class="row"><span class="price">${p.salePrice!=null?"<del>"+money(p.price)+"</del> ":""}${money(p.salePrice??p.price)}</span><button data-add="${escapeText(p.id)}" aria-label="Ver opciones de ${escapeText(p.name)}">Ver opciones <span aria-hidden="true">↗</span></button></div></div></article>`).join('')||'<div class="empty"><h3>No encontramos ese postre</h3><p>Prueba otro nombre o pulsa «Limpiar filtros».</p></div>';
 }
 function draw(){
  $('count').textContent=cart.reduce((sum,x)=>sum+x.qty,0);save();
@@ -32,7 +34,7 @@ function detail(preserve=false){
  $('toppings').innerHTML=selected.toppings.map(t=>`<label><input type="checkbox" name="topping" value="${escapeText(t.name)}"> ${escapeText(optionLabel(t))}</label>`).join('');
  if(previous){if(selected.sizes.some(s=>s.name===previous.get('size')))form.elements.size.value=previous.get('size');for(const input of form.querySelectorAll('[name=topping]'))input.checked=previous.getAll('topping').includes(input.value);}
  else form.reset();
- updateDetailPrice();
+ updateDetailPrice();window.dispatchEvent(new Event('ah-detail-ready'));
 }
 function updateDetailPrice(){
  if(!selected)return;const form=$('customize'),button=form.querySelector('[type=submit]');
@@ -40,7 +42,7 @@ function updateDetailPrice(){
  if(!selected.available){$('detailPrice').textContent=money(selected.price);$('option-price-note').textContent='Este postre volverá pronto. Puedes elegir otro del menú.';return;}
  const f=new FormData(form);const q=pricing.quote(selected,{qty:1,size:f.get('size'),toppings:f.getAll('topping')});
  $('detailPrice').textContent=money(q.price)+(q.extrasPending?' + por cotizar':'');
- $('option-price-note').textContent=q.extrasPending?'Este valor incluye los adicionales con precio. Confirmaremos los demás antes de preparar tu pedido.':'Precio por unidad con tus opciones. Domicilio de $4.500 por pedido.';
+ $('option-price-note').textContent=q.extrasPending?'Este valor incluye los adicionales con precio. Confirmaremos los demás antes de preparar tu pedido.':'Precio por unidad con tus opciones. Revisa las opciones de entrega en el carrito.';
 }
 function route(){
  const hash=location.hash,isCart=location.pathname.endsWith('/carrito.html');if(hash==='#carrito'&&!isCart){location.replace('./carrito.html');return;}
@@ -59,16 +61,16 @@ function applyCatalog(data,online){
 let catalogRequest=null;
 async function refreshCatalog(){
  if(catalogRequest)return catalogRequest;
- catalogRequest=(async()=>{const response=await fetch(window.AL_HORNO_API+'/catalog',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('No pudimos actualizar el menú. Intenta nuevamente.');const data=await response.json();applyCatalog(data.products,true);return products;})().finally(()=>catalogRequest=null);return catalogRequest;
+ catalogRequest=(async()=>{const response=await fetch(window.AL_HORNO_API+'/catalog',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('No pudimos actualizar el menú. Intenta nuevamente.');const data=await response.json();shopSettings=data.settings||AlHornoShopRules.defaults();bestsellers=data.bestsellers||[];applyCatalog(data.products,true);return products;})().finally(()=>catalogRequest=null);return catalogRequest;
 }
 window.AlHornoCatalog={refresh:refreshCatalog};
 async function verifyCart(){
  const signature=()=>JSON.stringify(cart.map(x=>{const p=products.find(p=>p.id===x.id);return {id:x.id,version:p?.version,...cartQuote(x)}}));
- const before=signature();await refreshCatalog();const after=signature();if(before!==after)throw Error('El menú cambió. Revisa el total actualizado y vuelve a enviar.');
+ const before=signature(),oldDelivery=JSON.stringify({version:shopSettings.version,...deliveryQuote()});await refreshCatalog();const after=signature();if(before!==after||oldDelivery!==JSON.stringify({version:shopSettings.version,...deliveryQuote()}))throw Error('El menú cambió. Revisa el total actualizado y vuelve a enviar.');
  const summary=cartSummary();if(summary.error)throw Error(summary.error);if(!cart.length)throw Error('Agrega un postre a tu carrito.');return summary;
 }
 window.AlHornoCheckout={verifyCart};
-$('search').oninput=catalog;$('category').onchange=catalog;$('sort').onchange=catalog;$('clear-filters').onclick=()=>{$('search').value='';$('category').value='';$('sort').value='menu';catalog()};
+$('search').oninput=catalog;$('category').onchange=catalog;$('sort').onchange=catalog;$('clear-filters').onclick=()=>{quickFilter='all';$('search').value='';$('category').value='';$('sort').value='menu';catalog()};
 $('products').onclick=e=>{const b=e.target.closest('[data-add]');if(b)location.hash='producto/'+b.dataset.add};
 $('customize').onchange=updateDetailPrice;
 $('customize').onsubmit=e=>{e.preventDefault();if(!selected||!selected.available||!catalogOnline)return;const f=new FormData(e.target);const item={id:selected.id,qty:1,size:f.get('size'),toppings:f.getAll('topping'),note:f.get('note').trim()};pricing.quote(selected,item);cart.push(item);draw();notify('Postre agregado. Puedes verlo en Mi carrito.')};

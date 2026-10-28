@@ -37,3 +37,7 @@ Desde Administrar → Productos puedes crear postres, editar nombre, categoría,
 El servidor vuelve a calcular cada total desde su catálogo y rechaza precios/versiones antiguos, opciones inexistentes y productos agotados. Los pedidos guardados conservan su detalle y precio histórico. La confirmación muestra número, entrega, pago pendiente y seguimiento. WhatsApp prepara un mensaje separado y no crea pedidos en el panel.
 
 Pruebas de API y precios: `node scripts/test-commerce.mjs` (Node 24; mocks aislados, sin datos reales).
+
+## Tienda ampliada (28 octubre 2026)
+Admin → Negocio: zonas y tarifas, recogida (desactivada hasta indicar dirección), horarios, cobertura e Instagram. Admin → Productos: ofertas, etiqueta Nuevo, ingredientes y alérgenos. Los más vendidos se calculan únicamente sobre pedidos entregados; no se inventan reseñas. Mis pedidos permite reseñar cada postre entregado una sola vez, con nombre público elegido por el cliente.
+El panel distingue valores de pedidos entregados de pagos cobrados. Datos opcionales vacíos no se publican. Domicilio inicial4500COP preservado. Navegación móvil y subtotal, filtros rápidos, logo WebP45KB, metadatos y sitemap. No se inventaron fotos reales: el admin muestra las repetidas o pendientes.
