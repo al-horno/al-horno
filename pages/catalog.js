@@ -70,7 +70,7 @@ async function verifyCart(){
  const summary=cartSummary();if(summary.error)throw Error(summary.error);if(!cart.length)throw Error('Agrega un postre a tu carrito.');return summary;
 }
 window.AlHornoCheckout={verifyCart};
-$('search').oninput=catalog;$('category').onchange=catalog;$('sort').onchange=catalog;$('clear-filters').onclick=()=>{quickFilter='all';$('search').value='';$('category').value='';$('sort').value='menu';catalog()};
+$('search').oninput=catalog;$('category').onchange=catalog;$('sort').onchange=catalog;$('clear-filters').onclick=()=>{quickFilter='all';$('search').value='';$('category').value='';$('sort').value='menu';catalog();for(const el of document.querySelectorAll('[data-quick]'))el.setAttribute('aria-pressed',String(el.dataset.quick==='all'))};
 $('products').onclick=e=>{const b=e.target.closest('[data-add]');if(b)location.hash='producto/'+b.dataset.add};
 $('customize').onchange=updateDetailPrice;
 $('customize').onsubmit=e=>{e.preventDefault();if(!selected||!selected.available||!catalogOnline)return;const f=new FormData(e.target);const item={id:selected.id,qty:1,size:f.get('size'),toppings:f.getAll('topping'),note:f.get('note').trim()};pricing.quote(selected,item);cart.push(item);draw();notify('Postre agregado. Puedes verlo en Mi carrito.')};

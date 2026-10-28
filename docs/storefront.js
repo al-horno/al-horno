@@ -10,7 +10,7 @@
  const total=document.getElementById('total');total.hidden=true;total.after(totals);
  function update(){
   const s=cartSummary(),delivery=s.delivery;
-  totals.innerHTML=s.error?'<p class="form-error">'+escapeText(s.error)+'</p>':'<div class="row"><span>Productos y adicionales</span><strong>'+money(s.subtotal)+'</strong></div><div class="row"><span>Entrega</span><strong>'+money(delivery)+'</strong></div>'+(s.pending?'<p class="quote-note">Hay opciones por cotizar; su valor aún no está incluido.</p>':'')+'<div class="row grand"><span>Total '+(s.pending?'base ':'')+'con domicilio</span><span>'+money(s.total)+'</span></div>';
+  totals.innerHTML=s.error?'<p class="form-error">'+escapeText(s.error)+'</p>':'<div class="row"><span>Productos y adicionales</span><strong>'+money(s.subtotal)+'</strong></div><div class="row"><span>Entrega</span><strong>'+money(delivery)+'</strong></div>'+(s.pending?'<p class="quote-note">Hay opciones por cotizar; su valor aún no está incluido.</p>':'')+'<div class="row grand"><span>Total '+(s.pending?'base ':'')+'con entrega</span><span>'+money(s.total)+'</span></div>';
   const wa=document.getElementById('order-whatsapp');if(wa)wa.disabled=!cart.length||!!s.error||!catalogOnline||!!window.AlHornoCheckoutBusy;
  }
  const alternative=document.createElement('div');alternative.className='whatsapp-order-option';
