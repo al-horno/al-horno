@@ -23,6 +23,6 @@
   const min=Math.min(...s.zones.map(z=>z.price));document.querySelector('.hero-note').textContent='Domicilio desde '+money(min)+' · Efectivo o Nequi';document.querySelector('footer small').textContent='Precios en pesos colombianos · San Gil, Santander';productInfo();
  }
  chips.onclick=e=>{const b=e.target.closest('[data-quick]');if(!b)return;quickFilter=b.dataset.quick;$('search').value='';$('category').value='';catalog();for(const el of chips.querySelectorAll('button'))el.setAttribute('aria-pressed',String(el===b));};
- window.addEventListener('ah-catalog-ready',render);
+ window.addEventListener('ah-catalog-ready',render);if(products.length)render();
  const privacy=document.createElement('details');privacy.className='privacy-info';privacy.innerHTML='<summary>Cómo usamos tus datos</summary><p>Al Horno utiliza tu nombre, teléfono, dirección y contenido del pedido para prepararlo, entregarlo y atender tus consultas. Las cuentas, pedidos y soporte se guardan en Supabase; los correos de cuenta se envían mediante Brevo. El catálogo se aloja en GitHub Pages. Si eliges WhatsApp, el mensaje se comparte allí cuando tú lo envías.</p><p>El carrito y el acceso de invitado se guardan en este navegador. Las reseñas publican únicamente el nombre público, la calificación y la opinión que eliges compartir. Para solicitar correcciones o eliminación de tus datos, contacta al negocio al +57 322 2798084.</p>';document.querySelector('footer').append(privacy);
 })();
