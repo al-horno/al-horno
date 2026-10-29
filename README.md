@@ -41,3 +41,6 @@ Pruebas de API y precios: `node scripts/test-commerce.mjs` (Node 24; mocks aisla
 ## Tienda ampliada (28 octubre 2026)
 Admin → Negocio: zonas y tarifas, recogida (desactivada hasta indicar dirección), horarios, cobertura e Instagram. Admin → Productos: ofertas, etiqueta Nuevo, ingredientes y alérgenos. Los más vendidos se calculan únicamente sobre pedidos entregados; no se inventan reseñas. Mis pedidos permite reseñar cada postre entregado una sola vez, con nombre público elegido por el cliente.
 El panel distingue valores de pedidos entregados de pagos cobrados. Datos opcionales vacíos no se publican. Domicilio inicial4500COP preservado. Navegación móvil y subtotal, filtros rápidos, logo WebP45KB, metadatos y sitemap. No se inventaron fotos reales: el admin muestra las repetidas o pendientes.
+
+### Pedidos programados
+El carrito permite pedir lo antes posible o elegir fecha y hora de Colombia (America/Bogota). Es una solicitud sujeta a confirmación del negocio. Se guarda en el pedido, aparece en confirmación/Mis pedidos/admin y se incluye en WhatsApp. El servidor rechaza fechas inexistentes o pasadas; los reintentos conservan la idempotencia. Pedidos anteriores siguen siendo compatibles.

@@ -96,6 +96,21 @@ assert.throws(()=>pricing.validateProduct({...sample,salePrice:11000}));
 assert.throws(()=>shopRules.validate({...newSettings,zones:[{id:'x',name:'X',price:-1,estimate:''}]}));
 assert.throws(()=>shopRules.validate({...newSettings,pickupAddress:''}));
 assert.throws(()=>shopRules.validate({...newSettings,instagram:'javascript:alert(1)'}));
+
+// Scheduled requests are normalized to Colombia time and validated again on the server.
+const fixedNow=Date.parse('2026-10-29T04:30:00Z');assert.equal(shopRules.today(fixedNow),'2026-10-28');
+assert.equal(shopRules.schedule({scheduleMode:'scheduled',scheduleDate:'2026-10-29',scheduleTime:'14:30'},fixedNow).scheduledFor,'2026-10-29T19:30:00.000Z');
+assert.equal(shopRules.schedule({scheduleMode:'asap'},fixedNow).scheduledFor,null);
+for(const choice of [{scheduleMode:'other'},{scheduleMode:'scheduled'},{scheduleMode:'scheduled',scheduleDate:'2026-02-30',scheduleTime:'12:00'},{scheduleMode:'scheduled',scheduleDate:'2026-10-29',scheduleTime:'25:00'},{scheduleMode:'scheduled',scheduleDate:'2026-10-28',scheduleTime:'23:00'}])assert.throws(()=>shopRules.schedule(choice,fixedNow));
+const futureDay=shopRules.today(Date.now()+2*86400000),scheduledPayload={...next,requestKey:crypto.randomUUID(),scheduleMode:'scheduled',scheduleDate:futureDay,scheduleTime:'14:30'};
+let scheduledResponse=await call('/orders','user',scheduledPayload);assert.equal(scheduledResponse.status,201);const scheduledOrder=(await scheduledResponse.json()).order;
+assert.equal(scheduledOrder.payload.scheduledFor,futureDay+'T19:30:00.000Z');assert.equal(scheduledOrder.payload.scheduleTimezone,'America/Bogota');assert.equal(scheduledOrder.payload.total,8000);
+assert.equal((await (await call('/orders','user',{...scheduledPayload,scheduleDate:'2020-01-01'})).json()).order.id,scheduledOrder.id);
+assert.equal((await call('/orders','user',{...scheduledPayload,requestKey:crypto.randomUUID(),scheduleDate:'2020-01-01'})).status,409);
+assert.equal((await call('/orders','user',{...scheduledPayload,requestKey:crypto.randomUUID(),scheduleTime:''})).status,409);
+assert.match(shopRules.scheduleLabel(scheduledOrder.payload),/Colombia/);
+console.log('PASS scheduled orders: strict dates, Colombia timezone, future-only, stored snapshot, stable retries, legacy ASAP.');
+
 failDatabase=true;assert.equal((await call('/catalog')).status,503);
 assert.equal((await call('/orders','user',{...payload,requestKey:crypto.randomUUID()})).status,503);
 console.log('PASS: configurable prices, unknown/free extras, malformed inputs, role forgery, admin create/update, version conflicts, new-product photos, public catalog, forged/stale totals, sold-out orders, idempotent retry, owner isolation, historical snapshots, database failures.');

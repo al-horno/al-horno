@@ -20,9 +20,9 @@
   if(!cart.length||window.AlHornoCheckoutBusy||!form.reportValidity())return;
   const status=document.getElementById('whatsapp-order-status');status.textContent='';window.AlHornoCheckoutBusy=true;draw();
   try{
-   const summary=await window.AlHornoCheckout.verifyCart(),data=new FormData(form);
+   const summary=await window.AlHornoCheckout.verifyCart(),schedule=window.AlHornoSchedule.validate(),data=new FormData(form);
    const lines=cart.map(x=>{const p=products.find(p=>p.id===x.id),q=cartQuote(x);return x.qty+' × '+p.name+' — '+money(q.lineTotal)+'\n'+[q.size,...q.toppings,x.note].filter(Boolean).join(' · ')+(q.extrasPending?' (hay adicionales por cotizar)':'')});
-   const message=['¡Hola, Al Horno! Quiero hacer este pedido:','',...lines,'','Productos y adicionales: '+money(summary.subtotal),'Entrega: '+deliveryQuote().deliveryLabel+' · '+money(summary.delivery),...(summary.pending?['Adicionales sin precio: por cotizar']:[]),'Total '+(summary.pending?'base ':'')+'con domicilio: '+money(summary.total),'Forma de pago: '+data.get('payment'),'Nombre: '+data.get('name'),'Celular: '+data.get('phone'),'Dirección: '+(deliveryQuote().pickupAddress||data.get('address')),...(data.get('notes')?.trim()?['Notas: '+data.get('notes').trim()]:[]),'Por favor confirmen disponibilidad y entrega.'].join('\n');
+   const message=['¡Hola, Al Horno! Quiero hacer este pedido:','',...lines,'','Productos y adicionales: '+money(summary.subtotal),'Entrega: '+deliveryQuote().deliveryLabel+' · '+money(summary.delivery),...(summary.pending?['Adicionales sin precio: por cotizar']:[]),'Total '+(summary.pending?'base ':'')+'con entrega: '+money(summary.total),'Cuándo: '+AlHornoShopRules.scheduleLabel(schedule),...(schedule.scheduledFor?['Fecha y hora solicitadas, sujetas a confirmación']:[]),'Forma de pago: '+data.get('payment'),'Nombre: '+data.get('name'),'Celular: '+data.get('phone'),'Dirección: '+(deliveryQuote().pickupAddress||data.get('address')),...(data.get('notes')?.trim()?['Notas: '+data.get('notes').trim()]:[]),'Por favor confirmen disponibilidad y entrega.'].join('\n');
    location.href='https://wa.me/573222798084?text='+encodeURIComponent(message);
   }catch(err){status.textContent=err.message;}finally{window.AlHornoCheckoutBusy=false;draw();}
  }

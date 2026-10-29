@@ -16,5 +16,22 @@
   const zone=s.zones.find(z=>z.id===(choice.zoneId||'general'));if(!zone)fail('Selecciona una zona de entrega disponible.');
   return {delivery:zone.price,fulfillment:'delivery',zoneId:zone.id,deliveryLabel:'Domicilio · '+zone.name,estimate:zone.estimate};
  }
- globalThis.AlHornoShopRules={defaults,validate,delivery};
+ // Colombia uses UTC-05:00. Never interpret the requested time in the device timezone.
+ function today(now=Date.now()){return new Date(now-5*60*60*1000).toISOString().slice(0,10)}
+ function schedule(choice={},now=Date.now()){
+  if(choice.scheduleMode===undefined||choice.scheduleMode==='asap')return {scheduledFor:null,scheduleTimezone:'America/Bogota'};
+  if(choice.scheduleMode!=='scheduled')fail('Selecciona cuándo quieres recibir tu pedido.');
+  const day=choice.scheduleDate,time=choice.scheduleTime;
+  if(typeof day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(day)||typeof time!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))fail('Elige una fecha y una hora válidas para tu pedido.');
+  const date=new Date(day+'T'+time+':00-05:00'),stamp=date.getTime();
+  if(!Number.isFinite(stamp)||new Date(stamp-5*60*60*1000).toISOString().slice(0,16)!==day+'T'+time)fail('La fecha elegida no existe.');
+  if(stamp<=now)fail('La fecha y hora ya pasaron. Elige un horario futuro (hora de Colombia).');
+  return {scheduledFor:date.toISOString(),scheduleTimezone:'America/Bogota'};
+ }
+ function scheduleLabel(payload){
+  if(!payload?.scheduledFor)return 'Lo antes posible · horario por confirmar';
+  const date=new Date(payload.scheduledFor);if(!Number.isFinite(date.getTime()))return 'Horario por confirmar';
+  return new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',dateStyle:'long',timeStyle:'short'}).format(date)+' (hora de Colombia)';
+ }
+ globalThis.AlHornoShopRules={defaults,validate,delivery,today,schedule,scheduleLabel};
 })();
