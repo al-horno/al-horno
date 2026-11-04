@@ -17,7 +17,7 @@ create table public.ah_orders (
  owner_id uuid not null,
  request_key uuid not null,
  payload jsonb not null,
- status text not null default 'recibido' check (status in ('recibido','confirmado','preparando','en_camino','entregado','cancelado')),
+ status text not null default 'recibido' check (status in ('recibido','confirmado','preparando','listo_recoger','en_camino','entregado','cancelado')),
  version integer not null default 1,
  created_at timestamptz not null default now(),
  unique(owner_id,request_key)
@@ -79,3 +79,4 @@ end; $$;
 revoke all on function ah_private.ah_new_account() from public,anon,authenticated;
 create trigger ah_auth_account after insert on auth.users for each row execute function ah_private.ah_new_account();
 grant all on public.ah_profiles,public.ah_admins,public.ah_guests,public.ah_orders,public.ah_threads,public.ah_messages,public.ah_rate_limits to service_role;
+

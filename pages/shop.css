@@ -3,3 +3,7 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 [hidden]{display:none!important}
+
+/* Order agenda and accessible progress */
+.order-progress{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}.order-progress li{padding:8px 12px;background:#f2ece7;border-radius:20px;color:#66574e}.order-progress .complete{background:#f8d9bd;color:#653415}.order-progress [aria-current]{outline:2px solid #b95620;font-weight:700}.order-cancelled{padding:12px;background:#fee5e5}.order-filters{padding:16px;border:1px solid #e7d6c8;border-radius:16px;margin:16px 0}.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.calendar-grid button{min-width:0;padding:8px 2px;background:#fff4e8;color:#603b25;border:1px solid #ddc5b1}.calendar-grid small{display:block;font-size:10px}.order-calendar{margin-top:20px}.order-filters input,.order-filters select{max-width:100%}
+

@@ -11,11 +11,12 @@
   day.setCustomValidity('');time.setCustomValidity('');preview.textContent='';
   if(!scheduled){day.value=time.value='';return;}
   if(!day.value||!time.value)return;
-  try{preview.textContent='Solicitado: '+AlHornoShopRules.scheduleLabel(AlHornoShopRules.schedule(Object.fromEntries(new FormData(form))));}
+  try{preview.textContent='Solicitado: '+AlHornoShopRules.scheduleLabel(AlHornoShopRules.schedule(Object.fromEntries(new FormData(form)),Date.now(),shopSettings));}
   catch(e){time.setCustomValidity(e.message);preview.textContent=e.message;}
  }
  for(const field of [mode,day,time])field.addEventListener('input',update);
  mode.addEventListener('change',update);form.addEventListener('reset',()=>setTimeout(update,0));
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)update()});
- window.AlHornoSchedule={validate(){update();return AlHornoShopRules.schedule(Object.fromEntries(new FormData(form)))}};update();
+ window.AlHornoSchedule={validate(){update();return AlHornoShopRules.schedule(Object.fromEntries(new FormData(form)),Date.now(),shopSettings)}};update();
 })();
+
