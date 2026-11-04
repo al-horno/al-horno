@@ -21,7 +21,7 @@ function checked<T extends {error:unknown,data:unknown}>(r:T){if(r.error)bad('No
 async function catalogRows(){return checked(await db.from('ah_products').select('id,data,version').order('sort_order').order('created_at').order('id').limit(500)) as any[];}
 async function publicCatalog(){const rows=await catalogRows();const photos=checked(await db.from('ah_product_images').select('product_id,image_url').limit(500)) as any[];return rows.map(r=>({...r.data,id:r.id,version:r.version,baseImg:r.data.img,img:photos.find(p=>p.product_id===r.id)?.image_url||r.data.img}));}
 const shopRules=(globalThis as any).AlHornoShopRules;
-async function shopSettings(){const r=checked(await db.from('ah_shop_settings').select('data,version').eq('id',true).single()) as any;return {...r.data,version:r.version};}
+async function shopSettings(){const r=checked(await db.from('ah_shop_settings').select('data,version').eq('id',true).single()) as any;return {...r.data,opening:shopRules.validateOpening(r.data.opening),version:r.version};}
 Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{headers});try{
  if(req.headers.get('Origin')&&req.headers.get('Origin')!==ORIGIN)bad('Origen no permitido',403);
  const path=new globalThis.URL(req.url).pathname.split('/al-horno-api')[1]||'/';
@@ -40,7 +40,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{heade
  if(path==='/product-images'&&req.method==='GET')return result({images:checked(await db.from('ah_product_images').select('product_id,image_url,updated_at').limit(100))});
  const a=photoActor||await actor(req);if(path==='/me'&&req.method==='GET')return result({user:a});
  if(path==='/business-stats'&&req.method==='GET'){mustAdmin(a);return result({stats:checked(await db.rpc('ah_business_stats'))});}
- if(path==='/settings'&&req.method==='PATCH'){mustAdmin(a);await rate('settings:'+a.id,30,3600);const data=shopRules.validate(b);if(!Number.isInteger(b.version))bad('Actualiza la configuración.',409);const r=await db.from('ah_shop_settings').update({data,version:b.version+1}).eq('id',true).eq('version',b.version).select('data,version').maybeSingle();checked(r);if(!r.data)bad('La configuración cambió. Vuelve a cargarla.',409);return result({settings:{...r.data.data,version:r.data.version}});}
+ if(path==='/settings'&&req.method==='PATCH'){mustAdmin(a);await rate('settings:'+a.id,30,3600);const previous=await shopSettings();const data=shopRules.validate({...b,opening:b.opening===undefined?previous.opening:b.opening});if(!Number.isInteger(b.version))bad('Actualiza la configuración.',409);const r=await db.from('ah_shop_settings').update({data,version:b.version+1}).eq('id',true).eq('version',b.version).select('data,version').maybeSingle();checked(r);if(!r.data)bad('La configuración cambió. Vuelve a cargarla.',409);return result({settings:{...r.data.data,version:r.data.version}});}
  if(path==='/reviews'&&req.method==='POST'){await rate('review:'+a.id,10,3600);const orderId=uuid(b.orderId),productId=str(b.productId,40);const order=checked(await db.from('ah_orders').select('payload,status').eq('id',orderId).eq('owner_id',a.id).maybeSingle()) as any;if(!order||order.status!=='entregado'||!order.payload.items.some((x:any)=>x.id===productId))bad('Solo puedes reseñar un postre de un pedido tuyo entregado.',403);if(!Number.isInteger(b.rating)||b.rating<1||b.rating>5)bad('Elige una calificación del 1 al 5.');const saved=await db.from('ah_reviews').insert({owner_id:a.id,order_id:orderId,product_id:productId,alias:str(b.alias,40),rating:b.rating,body:str(b.body,600)});if(saved.error?.code==='23505')bad('Ya compartiste una reseña de este postre.',409);checked(saved);return result({message:'Gracias. Tu reseña de compra verificada ya es pública.'},201);}
  const productRoute=path.match(/^\/products\/([a-z0-9_-]{1,40})$/);
  if((path==='/products'&&req.method==='POST')||(productRoute&&req.method==='PATCH')){
@@ -63,7 +63,16 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{heade
   const saved=await db.from('ah_product_images').upsert({product_id:id,image_url,updated_at:new Date().toISOString()}).select('product_id,image_url,updated_at').single();
   return result(checked(saved));
  }
- if(path==='/orders'&&req.method==='GET'){let q=db.from('ah_orders').select('*').order('created_at',{ascending:false}).limit(300);if(a.role!=='administrator')q=q.eq('owner_id',a.id);return result({orders:checked(await q)});}
+ if(path==='/orders'&&req.method==='GET'){
+  const params=new globalThis.URL(req.url).searchParams,admin=a.role==='administrator';
+  const page=Number(params.get('page')||1);if(!Number.isSafeInteger(page)||page<1||page>1000000)bad('Página inválida');
+  const month=admin?(params.get('month')||shopRules.today().slice(0,7)):null,date=admin?(params.get('date')||null):null,state=admin?(params.get('state')||null):null,delivery=admin?(params.get('delivery')||null):null;
+  if(month&&!/^[1-9][0-9]{3}-(0[1-9]|1[0-2])$/.test(month))bad('Mes inválido');
+  if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!date.startsWith(month!)||!Number.isFinite(Date.parse(date+'T12:00:00Z'))||new Date(date+'T12:00:00Z').toISOString().slice(0,10)!==date))bad('Fecha inválida');
+  if(state&&!['recibido','confirmado','preparando','listo_recoger','en_camino','entregado','cancelado'].includes(state))bad('Estado inválido');
+  if(delivery&&!['delivery','pickup'].includes(delivery))bad('Entrega inválida');
+  return result(checked(await db.rpc('ah_orders_page',{p_owner:admin?null:a.id,p_month:month?month+'-01':null,p_date:date,p_state:state,p_delivery:delivery,p_page:page})));
+ }
  if(path==='/orders'&&req.method==='POST'){
   const key=uuid(b.requestKey);const {data:existing}=await db.from('ah_orders').select('*').eq('owner_id',a.id).eq('request_key',key).maybeSingle();if(existing)return result({order:existing});await rate('order:'+a.id,15,3600);
   if(!Array.isArray(b.items)||!b.items.length||b.items.length>50)bad('Revisa el carrito');

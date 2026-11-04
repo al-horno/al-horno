@@ -20,6 +20,7 @@ function query(table){let filters={},mode='select',record,single=false,head=fals
   let data=null,error=null,count=null;
   if(table==='ah_shop_settings'){if(mode==='update'){if(filters.version===settings.version){settings={...settings,...record};data=settings;}else data=null;}else data=settings;}
   else if(table==='ah_reviews'){if(mode==='insert'){if(reviewRows.some(x=>x.owner_id===record.owner_id&&x.product_id===record.product_id))error={code:'23505'};else reviewRows.push({...record,id:crypto.randomUUID()});}else data=reviewRows.filter(x=>x.product_id===filters.product_id).map(({alias,rating,body,id})=>({alias,rating,body,id}));}
+  else if(table==='ah_threads')data=[];
   else if(table==='ah_profiles')data={username:'test'};
   else if(table==='ah_admins')data=filters.user_id==='admin-id'?{user_id:'admin-id'}:null;
   else if(table==='ah_guests')data={owner_id:'guest-id',expires_at:'2099-01-01'};
@@ -33,14 +34,14 @@ function query(table){let filters={},mode='select',record,single=false,head=fals
   }else if(table==='ah_orders'){
    const matches=r=>Object.entries(filters).every(([k,v])=>r[k]===v);
    if(mode==='insert'){record={...record,id:crypto.randomUUID(),status:'recibido',version:1,created_at:new Date().toISOString()};orderRows.push(record);data=record;}
-   else data=single?orderRows.find(matches)||null:orderRows.filter(matches);
+   else if(mode==='update'){const o=orderRows.find(matches);if(o)data=Object.assign(o,record)}else data=single?orderRows.find(matches)||null:orderRows.filter(matches);
   }else if(table==='ah_product_images'){
    if(mode==='upsert'){imageRows=[record];data=record;}else if(mode==='delete')imageRows=imageRows.filter(x=>x.product_id!==filters.product_id);else data=imageRows;
   }
   return Promise.resolve(resolve({data,error,count}));
  }};return q;
 }
-const client={from:query,rpc:async name=>({data:name==='ah_bestsellers'?[]:name==='ah_business_stats'?{today:0,pending:0,weekValue:0,monthValue:0}:true,error:null}),storage:{getBucket:async()=>({data:{},error:null}),from:()=>({upload:async()=>{uploads++;return {data:{},error:null}},getPublicUrl:path=>({data:{publicUrl:'https://example.com/'+path}})})},auth:{getUser:async token=>({data:{user:token==='admin'?{id:'admin-id',email:'gamerpixelpulse@gmail.com',email_confirmed_at:'2026-10-09'}:token==='user'?{id:'user-id',email:'other@example.com',email_confirmed_at:'2026-10-09'}:token==='forged'?{id:'user-id',email:'other@example.com',email_confirmed_at:'2026-10-09',user_metadata:{role:'administrator'}}:null},error:null})}};
+const client={from:query,rpc:async (name,args)=>{if(name==='ah_orders_page'){const list=orderRows.filter(o=>(!args.p_owner||o.owner_id===args.p_owner)&&(!args.p_state||args.p_state===o.status));return {data:{orders:list.slice(0,50),total:list.length,page:1,days:[],pendingToday:0},error:null}}return ({data:name==='ah_bestsellers'?[]:name==='ah_business_stats'?{today:0,pending:0,weekValue:0,monthValue:0}:true,error:null})},storage:{getBucket:async()=>({data:{},error:null}),from:()=>({upload:async()=>{uploads++;return {data:{},error:null}},getPublicUrl:path=>({data:{publicUrl:'https://example.com/'+path}})})},auth:{getUser:async token=>({data:{user:token==='admin'?{id:'admin-id',email:'gamerpixelpulse@gmail.com',email_confirmed_at:'2026-10-09'}:token==='user'?{id:'user-id',email:'other@example.com',email_confirmed_at:'2026-10-09'}:token==='forged'?{id:'user-id',email:'other@example.com',email_confirmed_at:'2026-10-09',user_metadata:{role:'administrator'}}:null},error:null})}};
 const photo=await import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(fs.readFileSync(root+'supabase/photo.ts','utf8'))).toString('base64'));
 const api=fs.readFileSync(root+'supabase/api.ts','utf8').replace(/^import .*;\r?\n/gm,'');
 vm.runInNewContext(stripTypeScriptTypes(api),{...photo,AlHornoShopRules:shopRules,AlHornoPricing:pricing,createClient:()=>client,Deno:{env:{get:()=>''},serve:f=>handler=f},URL,Request,Response,crypto,TextEncoder,Uint8Array,console});
@@ -58,7 +59,7 @@ assert.equal((await (await call('/catalog')).json()).products.find(p=>p.id===cre
 const png='data:image/png;base64,'+Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64');
 assert.equal((await call('/products/'+created.id+'/image','admin',{image:png})).status,200);assert.equal(uploads,1);
 assert.match((await (await call('/catalog')).json()).products.find(p=>p.id===created.id).img,/example.com/);
-const payload={requestKey:crypto.randomUUID(),name:'Test',phone:'3000000000',address:'Test address',notes:'',payment:'Efectivo',items:[{id:'w1',qty:2,size:'Grande',toppings:['Chocolate'],note:'',expectedPrice:15500,expectedVersion:2,expectedPending:false}]};
+const testDay=new Date(Date.now()+7*86400000);while(testDay.getUTCDay()!==2)testDay.setUTCDate(testDay.getUTCDate()+1);const payload={scheduleMode:'scheduled',scheduleDate:testDay.toISOString().slice(0,10),scheduleTime:'12:00',requestKey:crypto.randomUUID(),name:'Test',phone:'3000000000',address:'Test address',notes:'',payment:'Efectivo',items:[{id:'w1',qty:2,size:'Grande',toppings:['Chocolate'],note:'',expectedPrice:15500,expectedVersion:2,expectedPending:false}]};
 assert.equal((await call('/orders','user',{...payload,items:[{...payload.items[0],expectedPrice:1}]})).status,409);assert.equal(orderRows.length,0);
 assert.equal((await call('/orders','user',{...payload,items:[{...payload.items[0],expectedVersion:1}]})).status,409);
 assert.equal((await call('/orders','user',{...payload,items:[{...payload.items[0],toppings:['Not allowed']}]})).status,409);
@@ -85,7 +86,7 @@ assert.equal((await call('/orders','user',{...next,requestKey:crypto.randomUUID(
 let zoneOrder=await (await call('/orders','user',{...next,requestKey:crypto.randomUUID(),fulfillment:'delivery',zoneId:'north',expectedDelivery:8000})).json();assert.equal(zoneOrder.order.payload.total,16000);
 const review={orderId:pickup.order.id,productId:'w1',rating:5,alias:'Comprador',body:'Prueba aislada'};
 assert.equal((await call('/reviews','user',review)).status,403);
-orderRows.find(o=>o.id===pickup.order.id).status='entregado';
+let version=1;for(const status of ['confirmado','preparando','listo_recoger','entregado']){assert.equal((await call('/orders/'+pickup.order.id,'admin',{status,version:version++},'PATCH')).status,200);}
 assert.equal((await call('/reviews','guest.token',review)).status,403);
 assert.equal((await call('/reviews','user',{...review,productId:'w2'})).status,403);
 assert.equal((await call('/reviews','user',{...review,rating:6})).status,400);
@@ -100,9 +101,9 @@ assert.throws(()=>shopRules.validate({...newSettings,instagram:'javascript:alert
 // Scheduled requests are normalized to Colombia time and validated again on the server.
 const fixedNow=Date.parse('2026-10-29T04:30:00Z');assert.equal(shopRules.today(fixedNow),'2026-10-28');
 assert.equal(shopRules.schedule({scheduleMode:'scheduled',scheduleDate:'2026-10-29',scheduleTime:'14:30'},fixedNow).scheduledFor,'2026-10-29T19:30:00.000Z');
-assert.equal(shopRules.schedule({scheduleMode:'asap'},fixedNow).scheduledFor,null);
+assert.throws(()=>shopRules.schedule({scheduleMode:'asap'},fixedNow));
 for(const choice of [{scheduleMode:'other'},{scheduleMode:'scheduled'},{scheduleMode:'scheduled',scheduleDate:'2026-02-30',scheduleTime:'12:00'},{scheduleMode:'scheduled',scheduleDate:'2026-10-29',scheduleTime:'25:00'},{scheduleMode:'scheduled',scheduleDate:'2026-10-28',scheduleTime:'23:00'}])assert.throws(()=>shopRules.schedule(choice,fixedNow));
-const futureDay=shopRules.today(Date.now()+2*86400000),scheduledPayload={...next,requestKey:crypto.randomUUID(),scheduleMode:'scheduled',scheduleDate:futureDay,scheduleTime:'14:30'};
+const futureDay=payload.scheduleDate,scheduledPayload={...next,requestKey:crypto.randomUUID(),scheduleMode:'scheduled',scheduleDate:futureDay,scheduleTime:'14:30'};
 let scheduledResponse=await call('/orders','user',scheduledPayload);assert.equal(scheduledResponse.status,201);const scheduledOrder=(await scheduledResponse.json()).order;
 assert.equal(scheduledOrder.payload.scheduledFor,futureDay+'T19:30:00.000Z');assert.equal(scheduledOrder.payload.scheduleTimezone,'America/Bogota');assert.equal(scheduledOrder.payload.total,8000);
 assert.equal((await (await call('/orders','user',{...scheduledPayload,scheduleDate:'2020-01-01'})).json()).order.id,scheduledOrder.id);
@@ -114,4 +115,5 @@ console.log('PASS scheduled orders: strict dates, Colombia timezone, future-only
 failDatabase=true;assert.equal((await call('/catalog')).status,503);
 assert.equal((await call('/orders','user',{...payload,requestKey:crypto.randomUUID()})).status,503);
 console.log('PASS: configurable prices, unknown/free extras, malformed inputs, role forgery, admin create/update, version conflicts, new-product photos, public catalog, forged/stale totals, sold-out orders, idempotent retry, owner isolation, historical snapshots, database failures.');
+
 

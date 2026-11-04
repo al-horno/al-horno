@@ -9,12 +9,13 @@
   const scheduled=mode.value==='scheduled';document.getElementById('schedule-fields').hidden=!scheduled;
   day.required=time.required=scheduled;day.disabled=time.disabled=!scheduled;day.min=AlHornoShopRules.today();
   day.setCustomValidity('');time.setCustomValidity('');preview.textContent='';
-  if(!scheduled){day.value=time.value='';return;}
+  if(!scheduled){day.value=time.value='';try{AlHornoShopRules.schedule({scheduleMode:'asap'},Date.now(),shopSettings)}catch(e){preview.textContent=e.message+' Puedes programar tu pedido.'}return;}
   if(!day.value||!time.value)return;
   try{preview.textContent='Solicitado: '+AlHornoShopRules.scheduleLabel(AlHornoShopRules.schedule(Object.fromEntries(new FormData(form)),Date.now(),shopSettings));}
   catch(e){time.setCustomValidity(e.message);preview.textContent=e.message;}
  }
  for(const field of [mode,day,time])field.addEventListener('input',update);
+ window.addEventListener('ah-catalog-ready',update);
  mode.addEventListener('change',update);form.addEventListener('reset',()=>setTimeout(update,0));
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)update()});
  window.AlHornoSchedule={validate(){update();return AlHornoShopRules.schedule(Object.fromEntries(new FormData(form)),Date.now(),shopSettings)}};update();

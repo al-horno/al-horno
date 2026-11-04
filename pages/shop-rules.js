@@ -1,7 +1,8 @@
 // Shared delivery validation. Prices always come from the saved business settings.
 (() => {
  const fail=s=>{throw Object.assign(Error(s),{status:409})};
- const defaults=()=>({version:1,zones:[{id:'general',name:'San Gil',price:4500,estimate:''}],pickup:false,pickupAddress:'',hours:'',coverage:'San Gil, Santander',instagram:''});
+ const defaultOpening=()=>[null,...Array.from({length:6},()=>({open:'10:00',close:'18:00'}))];
+ const defaults=()=>({version:1,opening:defaultOpening(),zones:[{id:'general',name:'San Gil',price:4500,estimate:''}],pickup:false,pickupAddress:'',hours:'',coverage:'San Gil, Santander',instagram:''});
  function validate(s){
   const text=(v,n)=>{if(typeof v!=='string'||v.length>n)fail('Revisa los datos del negocio.');return v.trim()};
   if(!Array.isArray(s.zones)||!s.zones.length||s.zones.length>20)fail('Agrega entre 1 y 20 zonas.');
@@ -20,13 +21,13 @@
  // Colombia uses UTC-05:00. Never interpret the requested time in the device timezone.
  function today(now=Date.now()){return new Date(now-5*60*60*1000).toISOString().slice(0,10)}
  function validateOpening(value){
-  if(value==null)return null;
+  if(value==null)return defaultOpening();
   if(!Array.isArray(value)||value.length!==7)fail('Configura los siete días del horario.');
   return value.map(d=>{if(d===null)return null;if(!d||!/^([01]\d|2[0-3]):[0-5]\d$/.test(d.open)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(d.close)||d.open>=d.close)fail('La apertura debe ser anterior al cierre.');return {open:d.open,close:d.close}});
  }
  function checkOpening(stamp,settings){
-  if(!settings?.opening)return;
-  const local=new Date(stamp-5*3600000),slot=settings.opening[local.getUTCDay()],time=local.toISOString().slice(11,16);
+  const opening=validateOpening(settings?.opening);
+  const local=new Date(stamp-5*3600000),slot=opening[local.getUTCDay()],time=local.toISOString().slice(11,16);
   if(!slot||time<slot.open||time>=slot.close)fail('Fuera del horario de atención. Elige otro día u hora.');
  }
  function schedule(choice={},now=Date.now(),settings){
@@ -46,6 +47,6 @@
   return new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',dateStyle:'long',timeStyle:'short'}).format(date)+' (hora de Colombia)';
  }
  function nextStates(o){const pickup=o.payload.fulfillment==='pickup';const map={recibido:['confirmado','cancelado'],confirmado:['preparando','cancelado'],preparando:[pickup?'listo_recoger':'en_camino','cancelado'],listo_recoger:['entregado','cancelado'],en_camino:['entregado','cancelado'],entregado:[],cancelado:[]};return map[o.status]||[];}
- globalThis.AlHornoShopRules={defaults,validate,delivery,today,schedule,scheduleLabel,validateOpening,checkOpening,nextStates};
+ globalThis.AlHornoShopRules={defaultOpening,defaults,validate,delivery,today,schedule,scheduleLabel,validateOpening,checkOpening,nextStates};
 })();
 
