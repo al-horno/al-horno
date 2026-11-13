@@ -33,6 +33,29 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{heade
  const ip=await hash(req.headers.get('x-forwarded-for')?.split(',')[0]||req.headers.get('cf-connecting-ip')||'unknown');
  if(path==='/guest'&&req.method==='POST'){await rate('guest:'+ip,20,3600);const token='guest.'+crypto.randomUUID()+crypto.randomUUID();const saved=await db.from('ah_guests').insert({token_hash:await hash(token)}).select('owner_id').single();checked(saved);return result({token,user:{id:saved.data!.owner_id,role:'guest',name:'Invitado'}});}
  if(path==='/register'&&req.method==='POST'){await rate('register:'+ip,8,3600);const username=str(b.name,40).toLowerCase(),email=str(b.email,200).toLowerCase(),password=str(b.password,128);if(!/^[a-z0-9_.-]{3,40}$/.test(username)||password.length<8||!email.includes('@'))bad('Usa un nombre de 3–40 caracteres sin espacios y una contraseña de al menos 8 caracteres.');const {error}=await auth().auth.signUp({email,password,options:{data:{username},emailRedirectTo:ORIGIN+'/al-horno/'}});if(error)bad('No se pudo crear la cuenta. Revisa el nombre, correo y contraseña o intenta más tarde.');return result({message:'Revisa tu correo para confirmar la cuenta. Después inicia sesión con tu nombre y contraseña.'});}
+ if(path==='/forgot-password'&&req.method==='POST'){
+  const email=str(b.email,200).toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))bad('Escribe un correo válido.');
+  await rate('recovery-ip:'+ip,5,3600);
+  await rate('recovery-email:'+await hash(email),3,3600);
+  const {error}=await auth().auth.resetPasswordForEmail(email,{redirectTo:ORIGIN+'/al-horno/'});
+  if(error)bad('No pudimos enviar el enlace. Espera unos minutos e intenta nuevamente.',503);
+  return result({message:'Si ese correo tiene una cuenta, recibirás un enlace para cambiar la contraseña. Revisa también Spam.'});
+ }
+ if(path==='/reset-password'&&req.method==='POST'){
+  const token=req.headers.get('Authorization')?.replace(/^Bearer /,'')||'';
+  const client=auth();
+  const verified=await client.auth.getUser(token);
+  if(verified.error||!verified.data.user)bad('El enlace venció o no es válido. Solicita uno nuevo.',401);
+  await rate('reset-password:'+verified.data.user.id,5,3600);
+  if(typeof b.password!=='string'||b.password.length<8||b.password.length>128||b.password.trim()!==b.password)bad('Usa entre 8 y 128 caracteres, sin espacios al principio ni al final.');
+  const restored=await client.auth.setSession({access_token:token,refresh_token:str(b.refreshToken,2000)});
+  if(restored.error||restored.data.user?.id!==verified.data.user.id)bad('El enlace venció. Solicita uno nuevo.',401);
+  const changed=await client.auth.updateUser({password:b.password});
+  if(changed.error)bad('No se pudo cambiar la contraseña. Usa una nueva y más segura, o solicita otro enlace.',400);
+  await client.auth.signOut({scope:'global'});
+  return result({message:'Contraseña actualizada. Inicia sesión con tu nombre de usuario y la nueva contraseña.'});
+ }
  if(path==='/login'&&req.method==='POST'){await rate('login:'+ip,15,900);const name=str(b.name,200).toLowerCase(),password=str(b.password,128);await rate('login-name:'+await hash(name),15,900);const {data:p}=await db.from('ah_profiles').select('email').eq('username',name).maybeSingle();const {data,error}=await auth().auth.signInWithPassword({email:p?.email||'not-found@invalid.example',password});if(error||!data.session)bad('Nombre o contraseña incorrectos, o correo sin confirmar.',401);return result({session:data.session});}
  if(path==='/refresh'&&req.method==='POST'){await rate('refresh:'+ip,100,3600);const {data,error}=await auth().auth.refreshSession({refresh_token:str(b.refreshToken,500)});if(error||!data.session)bad('Inicia sesión nuevamente',401);return result({session:data.session});}
  if(path==='/catalog'&&req.method==='GET')return result({products:await publicCatalog(),settings:await shopSettings(),bestsellers:checked(await db.rpc('ah_bestsellers'))});
